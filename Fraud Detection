@@ -1,0 +1,1162 @@
+import numpy as np
+import pandas as pd
+from matplotlib import pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+from imblearn.over_sampling import SMOTE
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
+from sklearn.metrics import accuracy_score
+from sklearn.linear_model import LogisticRegression
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import recall_score, precision_score, accuracy_score, f1_score
+from itertools import cycle
+from sklearn.metrics import confusion_matrix,precision_recall_curve,auc,roc_auc_score,roc_curve,recall_score,classification_report
+from sklearn.model_selection import train_test_split
+from imblearn.over_sampling import SMOTE
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_score
+from sklearn.metrics import roc_curve
+from sklearn.model_selection import cross_val_predict
+from sklearn.cluster import KMeans
+
+
+data = pd.read_csv('C:/Users/Jason/Desktop/Thesis/Data.csv')
+df2 = pd.read_csv('C:/Users/Jason/Desktop/Thesis/Data_Cleaned.csv')
+df = data
+
+data.head()
+
+data.FraudFound_P.value_counts()
+
+# bar chart
+from matplotlib import pyplot as plt
+name_list = ['1', '0']
+num_list = [data['FraudFound_P'].sum(), 11300-data['FraudFound_P'].sum()]
+plt.bar(range(len(num_list)), num_list, color = 'rgb', tick_label = name_list)
+
+# pie chart
+labels = '1', '0'
+sizes = [data['FraudFound_P'].sum(), 11300-data['FraudFound_P'].sum()]
+plt.pie(sizes, labels = labels, autopct = '%1.1f%%', shadow = False)
+
+# check the correlation
+data['FraudFound_P'].corr(data['DriverRating'])
+
+
+## Clustering & SMOTE
+
+df5 = df.sample(frac=1)
+X5 = df5.iloc[:, :-1]
+y5 = df5.iloc[:, -1]
+
+X5_train, X5_test, y5_train, y5_test = train_test_split(X5, y5, test_size=0.2, random_state=42)
+
+sm = SMOTE(ratio={1: 9000},random_state=42)
+X5sm_train, y5sm_train = sm.fit_sample(X5_train, y5_train)
+X5sm_train = pd.DataFrame(X5sm_train)
+y5sm_train = pd.DataFrame(y5sm_train)
+
+# sum(y5sm_train==1)
+
+# X5sm_train, y5sm_train = X5_train, y5_train
+
+
+
+train = X5sm_train
+train['test'] = 0
+train['fraud'] = y5sm_train
+
+test = X5_test
+test['test'] = 1
+test['fraud'] = y5_test
+
+train.columns = test.columns
+data77 = pd.concat([train, test])
+
+data99 = data77.iloc[:,:-2]
+
+data99['fraud'] = data77.iloc[:, 31:32]
+data99['test'] = data77.iloc[:, 32:33]
+
+
+clf=KMeans(n_clusters=3)
+clf=clf.fit(data99)
+
+# clf.cluster_centers_
+data99['label']=clf.labels_
+data99['test']=data77.iloc[:,-2].values
+data99['fraud']=data77.iloc[:,-1].values
+
+
+data0=data99.loc[data99["label"] == 0]
+data1=data99.loc[data99["label"] == 1]
+data2=data99.loc[data99["label"] == 2]
+
+
+### data0 ###############
+
+data0=data99.loc[data99["label"] == 0]
+data0_test = data0.loc[data0['test']==1]
+data0_test = data0_test.drop(['test', 'label'],axis=1)
+X_test0 = data0_test.iloc[:,:-1]
+y_test0 = data0_test.iloc[:,-1]
+
+data0_train = data0.loc[data0['test']==0]
+# sm = SMOTE(ratio={1: 9000},random_state=42)
+# X5sm_train, y5sm_train = sm.fit_sample(X5_train, y5_train)
+# X5sm_train = pd.DataFrame(X5sm_train)
+# y5sm_train = pd.DataFrame(y5sm_train)
+
+data0_train = data0_train.drop(['test', 'label'],axis=1)
+X_train0 = data0_train.iloc[:,:-1]
+y_train0 = data0_train.iloc[:,-1]
+
+
+# Randon Forest Classifier
+from sklearn.model_selection import GridSearchCV
+tree_params = {"criterion": ["gini", "entropy"], "max_depth": list(range(2,4,1)),
+              "min_samples_leaf": list(range(5,7,1))}
+grid_tree = GridSearchCV(DecisionTreeClassifier(), tree_params)
+grid_tree.fit(X_train0, y_train0)
+# tree best estimator
+tree_clf = grid_tree.best_estimator_
+y_pred_tree0 = tree_clf.predict(X_test0)
+
+recall_score(y_test0, y_pred_tree0, average='binary') # 0.8469387755102041
+precision_score(y_test0, y_pred_tree0) # 0.10863874345549739
+
+import seaborn as sn
+confusion_matrix = pd.crosstab(y_test0, y_pred_tree0, rownames=['Actual'], colnames=['Predicted'])
+sn.heatmap(confusion_matrix, annot=True)
+
+
+############## Naive Bayes
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.naive_bayes import GaussianNB
+from sklearn.preprocessing import QuantileTransformer
+
+pipeline = make_pipeline(QuantileTransformer(output_distribution='normal'), GaussianNB())
+pipeline.fit(X_train0, y_train0)
+y_pred_tree0 = pipeline.predict(X_test0)
+
+recall_score(y_test0, y_pred_tree0, average='binary') # 0.35714285714285715
+precision_score(y_test0, y_pred_tree0) # 0.13307984790874525
+
+import seaborn as sn
+confusion_matrix = pd.crosstab(y_test0, y_pred_tree0, rownames=['Actual'], colnames=['Predicted'])
+sn.heatmap(confusion_matrix, annot=True)
+
+
+# LR Classifier
+
+log_reg_params = {"penalty": ['l1', 'l2'], 'C': [0.001, 0.01, 0.1, 1, 10, 100, 1000]}
+grid_log_reg = GridSearchCV(LogisticRegression(), log_reg_params)
+grid_log_reg.fit(X_train0, y_train0)
+log_reg = grid_log_reg.best_estimator_
+y_pred_log = log_reg.predict(X_test0)
+
+
+recall_score(y_test0, y_pred_log, average='binary') # 0.8088235294117647  0.7857142857142857
+precision_score(y_test0, y_pred_log) # 0.1323024054982818
+
+import seaborn as sn
+confusion_matrix = pd.crosstab(y_test0, y_pred_log, rownames=['Actual'], colnames=['Predicted'])
+sn.heatmap(confusion_matrix, annot=True)
+
+# Gradient Boosting
+
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.metrics import classification_report, confusion_matrix, roc_curve, auc
+
+learning_rates = [0.05, 0.1, 0.25, 0.5, 0.75, 1]
+for learning_rate in learning_rates:
+    gb4 = GradientBoostingClassifier(n_estimators=20, learning_rate = learning_rate, max_features=2, max_depth = 2, random_state = 0)
+    gb4.fit(X_train0, y_train0)
+
+gb4 = GradientBoostingClassifier(n_estimators=20, learning_rate = 0.05, max_features=2, max_depth = 2, random_state = 0)   ### 0.05 => 0.95  0.09
+gb4.fit(X_train0, y_train0)
+y_pred_tree0 = gb4.predict(X_test0)
+
+recall_score(y_test0, y_pred_tree0, average='binary') # 0.5714285714285714
+precision_score(y_test0, y_pred_tree0) # 0.14583333333333334
+
+import seaborn as sn
+confusion_matrix = pd.crosstab(y_test0, y_pred_tree0, rownames=['Actual'], colnames=['Predicted'])
+sn.heatmap(confusion_matrix, annot=True)
+
+
+
+### data1 ###############
+
+data0 = data1
+data0_test = data0.loc[data0['test']==1]
+data0_test = data0_test.drop(['test', 'label'],axis=1)
+X_test0 = data0_test.iloc[:,:-1]
+y_test0 = data0_test.iloc[:,-1]
+
+data0_train = data0.loc[data0['test']==0]
+data0_train = data0_train.drop(['test', 'label'],axis=1)
+X_train0 = data0_train.iloc[:,:-1]
+y_train0 = data0_train.iloc[:,-1]
+
+
+# Randon Forest Classifier
+from sklearn.model_selection import GridSearchCV
+tree_params = {"criterion": ["gini", "entropy"], "max_depth": list(range(2,4,1)),
+              "min_samples_leaf": list(range(5,7,1))}
+grid_tree = GridSearchCV(DecisionTreeClassifier(), tree_params)
+grid_tree.fit(X_train0, y_train0)
+# tree best estimator
+tree_clf = grid_tree.best_estimator_
+y_pred_tree0 = tree_clf.predict(X_test0)
+
+recall_score(y_test0, y_pred_tree0, average='binary') # 0.72
+precision_score(y_test0, y_pred_tree0) # 0.16822429906542055
+
+import seaborn as sn
+confusion_matrix = pd.crosstab(y_test0, y_pred_tree0, rownames=['Actual'], colnames=['Predicted'])
+sn.heatmap(confusion_matrix, annot=True)
+
+
+# NB
+pipeline = make_pipeline(QuantileTransformer(output_distribution='normal'), GaussianNB())
+pipeline.fit(X_train0, y_train0)
+y_pred_tree0 = pipeline.predict(X_test0)
+
+recall_score(y_test0, y_pred_tree0, average='binary') # 0.92
+precision_score(y_test0, y_pred_tree0) # 0.09787234042553192
+
+import seaborn as sn
+confusion_matrix = pd.crosstab(y_test0, y_pred_tree0, rownames=['Actual'], colnames=['Predicted'])
+sn.heatmap(confusion_matrix, annot=True)
+
+
+
+# LR Classifier
+
+log_reg_params = {"penalty": ['l1', 'l2'], 'C': [0.001, 0.01, 0.1, 1, 10, 100, 1000]}
+grid_log_reg = GridSearchCV(LogisticRegression(), log_reg_params)
+grid_log_reg.fit(X_train0, y_train0)
+log_reg = grid_log_reg.best_estimator_
+y_pred_log = log_reg.predict(X_test0)
+
+
+recall_score(y_test0, y_pred_log, average='binary') # 0.88
+precision_score(y_test0, y_pred_log) # 0.15602836879432624
+
+import seaborn as sn
+confusion_matrix = pd.crosstab(y_test0, y_pred_log, rownames=['Actual'], colnames=['Predicted'])
+sn.heatmap(confusion_matrix, annot=True)
+
+# Gradient Boosting
+
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.metrics import classification_report, confusion_matrix, roc_curve, auc
+
+learning_rates = [0.05, 0.1, 0.25, 0.5, 0.75, 1]
+for learning_rate in learning_rates:
+    gb4 = GradientBoostingClassifier(n_estimators=20, learning_rate = learning_rate, max_features=2, max_depth = 2, random_state = 0)
+    gb4.fit(X_train0, y_train0)
+
+gb4 = GradientBoostingClassifier(n_estimators=20, learning_rate = 0.05, max_features=2, max_depth = 2, random_state = 0)   ### 0.05 => 0.95  0.09
+gb4.fit(X_train0, y_train0)
+y_pred_tree0 = gb4.predict(X_test0)
+
+recall_score(y_test0, y_pred_tree0, average='binary') # 0.96
+precision_score(y_test0, y_pred_tree0) # 0.125
+
+import seaborn as sn
+confusion_matrix = pd.crosstab(y_test0, y_pred_tree0, rownames=['Actual'], colnames=['Predicted'])
+sn.heatmap(confusion_matrix, annot=True)
+
+
+### data2 ###############
+
+data0 = data2
+data0_test = data0.loc[data0['test']==1]
+data0_test = data0_test.drop(['test', 'label'],axis=1)
+X_test0 = data0_test.iloc[:,:-1]
+y_test0 = data0_test.iloc[:,-1]
+
+data0_train = data0.loc[data0['test']==0]
+data0_train = data0_train.drop(['test', 'label'],axis=1)
+X_train0 = data0_train.iloc[:,:-1]
+y_train0 = data0_train.iloc[:,-1]
+
+# Randon Forest Classifier
+from sklearn.model_selection import GridSearchCV
+tree_params = {"criterion": ["gini", "entropy"], "max_depth": list(range(2,4,1)),
+              "min_samples_leaf": list(range(5,7,1))}
+grid_tree = GridSearchCV(DecisionTreeClassifier(), tree_params)
+grid_tree.fit(X_train0, y_train0)
+# tree best estimator
+tree_clf = grid_tree.best_estimator_
+y_pred_tree0 = tree_clf.predict(X_test0)
+
+recall_score(y_test0, y_pred_tree0, average='binary') # 0.6842105263157895
+precision_score(y_test0, y_pred_tree0) # 0.16666666666666666
+
+import seaborn as sn
+confusion_matrix = pd.crosstab(y_test0, y_pred_tree0, rownames=['Actual'], colnames=['Predicted'])
+sn.heatmap(confusion_matrix, annot=True)
+
+
+# NB
+pipeline = make_pipeline(QuantileTransformer(output_distribution='normal'), GaussianNB())
+pipeline.fit(X_train0, y_train0)
+y_pred_tree0 = pipeline.predict(X_test0)
+
+recall_score(y_test0, y_pred_tree0, average='binary') # 0.7894736842105263
+precision_score(y_test0, y_pred_tree0) # 0.13157894736842105
+
+import seaborn as sn
+confusion_matrix = pd.crosstab(y_test0, y_pred_tree0, rownames=['Actual'], colnames=['Predicted'])
+sn.heatmap(confusion_matrix, annot=True)
+
+
+# LR Classifier
+
+log_reg_params = {"penalty": ['l1', 'l2'], 'C': [0.001, 0.01, 0.1, 1, 10, 100, 1000]}
+grid_log_reg = GridSearchCV(LogisticRegression(), log_reg_params)
+grid_log_reg.fit(X_train0, y_train0)
+log_reg = grid_log_reg.best_estimator_
+y_pred_log = log_reg.predict(X_test0)
+
+
+recall_score(y_test0, y_pred_log, average='binary') # 0.5555555555555556
+precision_score(y_test0, y_pred_log) # 0.06578947368421052
+
+import seaborn as sn
+confusion_matrix = pd.crosstab(y_test0, y_pred_log, rownames=['Actual'], colnames=['Predicted'])
+sn.heatmap(confusion_matrix, annot=True)
+
+
+
+# Gradient Boosting
+
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.metrics import classification_report, confusion_matrix, roc_curve, auc
+
+learning_rates = [0.05, 0.1, 0.25, 0.5, 0.75, 1]
+for learning_rate in learning_rates:
+    gb4 = GradientBoostingClassifier(n_estimators=20, learning_rate = learning_rate, max_features=2, max_depth = 2, random_state = 0)
+    gb4.fit(X_train0, y_train0)
+
+gb4 = GradientBoostingClassifier(n_estimators=20, learning_rate = 0.05, max_features=2, max_depth = 2, random_state = 0)   ### 0.05 => 0.95  0.09
+gb4.fit(X_train0, y_train0)
+y_pred_tree0 = gb4.predict(X_test0)
+
+recall_score(y_test0, y_pred_tree0, average='binary') # 0.15789473684210525
+precision_score(y_test0, y_pred_tree0) # 0.10714285714285714
+
+import seaborn as sn
+confusion_matrix = pd.crosstab(y_test0, y_pred_tree0, rownames=['Actual'], colnames=['Predicted'])
+sn.heatmap(confusion_matrix, annot=True)
+
+
+from sklearn.model_selection import train_test_split
+X = np.array(data.ix[:, data.columns != 'FraudFound_P'])
+y = np.array(data.ix[:, data.columns == 'FraudFound_P'])
+
+X1 = df2.iloc[:, :-1]
+y1 = df2.iloc[:, -1]
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+X1_train, X1_test, y1_train, y1_test = train_test_split(X1, y1, test_size=0.2, random_state=42)
+
+# Standardization
+from sklearn.preprocessing import StandardScaler
+sc = StandardScaler()
+X_train = sc.fit_transform(X_train)
+# X_train = pd.DataFrame(X_train)
+X_test = sc.transform(X_test)
+
+X1_train = sc.fit_transform(X1_train)
+X1_test = sc.transform(X1_test)
+
+# Correlation Matrices
+f, (ax1, ax2) = plt.subplots(2, 1, figsize=(24,20))
+corr = df.corr()
+sns.heatmap(corr, cmap='coolwarm_r', annot_kws={'size':20}, ax=ax1)
+ax1.set_title("Imbalanced Correlation Matrix", fontsize=14)
+
+# New
+df = df.sample(frac=1)
+non_fraud_df = df.loc[df['FraudFound_P'] == 0][:685]
+fraud_df = df.loc[df['FraudFound_P'] == 1]
+normal_distributed_df = pd.concat([fraud_df, non_fraud_df])
+
+new_df = normal_distributed_df.sample(frac=1, random_state=42)
+sub_sample_corr = new_df.corr()
+sns.heatmap(sub_sample_corr, cmap='coolwarm_r', annot_kws={'size':20}, ax=ax2)
+ax2.set_title('SubSample Correlation Matrix', fontsize=14)
+plt.show()
+
+
+# Check Assumptions of LR
+# ASSUMPTION OF CONTINUOUS IVS BEING LINEARLY RELATED TO THE LOG ODDS
+import statsmodels.formula.api as smf
+C_S = sns.regplot(x= 'ClaimSize', y= 'FraudFound_P', data= df, logistic= True).set_title("ClaimSize Log Odds Linear Plot")
+C_S = sns.regplot(x= 'Age', y= 'FraudFound_P', data= df, logistic= True).set_title("Age Log Odds Linear Plot")
+
+# ASSUMPTION OF ABSENCE OF MULTICOLLINEARITY
+df.corr()
+# Delete the MULTICOLLINEARITY Variables
+columns = ['Month', 'AgeOfVehicle_year', 'AgeOfPolicyHolder', 'Year', 'BasePolicy', 'VehiclePrice', 'VehicleCategory', 'PolicyNumber']
+df1 = df.drop(columns, axis=1)
+
+# ASSUMPTION OF LOCK OF OUTLIERS
+ClaimSize_box = sns.boxplot(data= df[['ClaimSize']]).set_title("ClaimSize Box Plot")
+
+from sklearn.model_selection import cross_val_score
+log_reg_score = cross_val_score(log_reg, X_train, y_train, cv=5)
+print('Logistic Regression Cross Validation Score: ', round(log_reg_score.mean() * 100, 2).astype(str) + '%')
+
+
+# LR
+# SMOTE
+from imblearn.over_sampling import SMOTE
+# SMOTE Technique (OverSampling) After splitting and Cross Validating
+sm = SMOTE(ratio={1: 4000},random_state=42)
+Xsm_train, ysm_train = sm.fit_sample(X_train, y_train)
+X1sm_train, y1sm_train = sm.fit_sample(X1_train, y1_train)
+
+sm1 = SMOTE(ratio={1: 8514},random_state=42)
+X3sm_train, y3sm_train = sm1.fit_sample(X_train, y_train)
+X2sm_train, y2sm_train = sm1.fit_sample(X1_train, y1_train)
+
+
+# Under - Smaple & SMOTE for LR
+df3 = df2.sample(frac=1)
+non_fraud_df = df3.loc[df['FraudFound_P'] == 0][:6000]
+fraud_df = df3.loc[df['FraudFound_P'] == 1]
+normal_distributed_df = pd.concat([fraud_df, non_fraud_df])
+new_df1 = normal_distributed_df.sample(frac=1, random_state=42)
+
+X8 = new_df1.iloc[:, :-1]
+y8 = new_df1.iloc[:, -1]
+X8_train, X8_test, y8_train, y8_test = train_test_split(X8, y8, test_size=0.2, random_state=42)
+
+sm = SMOTE(ratio={1: 9000},random_state=42)
+X8sm_train, y8sm_train = sm.fit_sample(X8_train, y8_train)
+
+
+# Logistic Regression
+log_reg_params = {"penalty": ['l1', 'l2'], 'C': [0.001, 0.01, 0.1, 1, 10, 100, 1000]}
+grid_log_reg = GridSearchCV(LogisticRegression(), log_reg_params)
+grid_log_reg.fit(X1_train, y1_train)
+log_reg = grid_log_reg.best_estimator_
+y_pred_log = log_reg.predict(X1_test)
+
+# Logistic Regression After SMOTE (1:4000)
+log_reg_params = {"penalty": ['l1', 'l2'], 'C': [0.001, 0.01, 0.1, 1, 10, 100, 1000]}
+grid_log_reg2 = GridSearchCV(LogisticRegression(), log_reg_params)
+grid_log_reg2.fit(X1sm_train, y1sm_train)
+log_reg2 = grid_log_reg2.best_estimator_
+y1sm_pred_log = log_reg2.predict(X1_test)
+
+# Logistic Regression After SMOTE (1:9000)
+grid_log_reg3 = GridSearchCV(LogisticRegression(), log_reg_params)
+grid_log_reg3.fit(X2sm_train, y2sm_train)
+log_reg3 = grid_log_reg3.best_estimator_
+y2sm_pred_log = log_reg3.predict(X1_test)
+
+# Undersampling & SMOTE
+grid_log_reg8 = GridSearchCV(LogisticRegression(), log_reg_params)
+grid_log_reg8.fit(X8sm_train, y8sm_train)
+log_reg8 = grid_log_reg8.best_estimator_
+y8sm_pred_log = log_reg8.predict(X8_test)
+
+
+
+# ROC Curve
+from sklearn.metrics import roc_curve
+from sklearn.model_selection import cross_val_predict
+
+log_reg_pred = cross_val_predict(log_reg, X1_train, y1_train, cv=5)
+log_fpr, log_tpr, log_thresold = roc_curve(y1_train, log_reg_pred)
+
+log_reg_pred2 = cross_val_predict(log_reg2, X1sm_train, y1sm_train, cv=5)
+log_fpr2, log_tpr2, log_thresold2 = roc_curve(y1sm_train, log_reg_pred2)
+
+log_reg_pred3 = cross_val_predict(log_reg3, X2sm_train, y2sm_train, cv=5)
+log_fpr3, log_tpr3, log_thresold3 = roc_curve(y2sm_train, log_reg_pred3)
+
+log_reg_pred8 = cross_val_predict(log_reg8, X8sm_train, y8sm_train, cv=5)
+log_fpr4, log_tpr4, log_thresold4 = roc_curve(y8sm_train, log_reg_pred8)
+
+def graph_roc_curve_multiple(log_fpr, log_tpr, log_fpr2, log_tpr2):
+    plt.figure(figsize=(16,8))
+    plt.title('ROC Curve \n Top 4 Classifiers', fontsize=18)
+    plt.plot(log_fpr, log_tpr, label='Logistic Regression (Before SMOTE) Classifier Score: {:.4f}'.format(roc_auc_score(y1_train, log_reg_pred)))
+    plt.plot(log_fpr2, log_tpr2, label='Logistic Regression (After SMOTE 1:4000) Classifier Score: {:.4f}'.format(roc_auc_score(y1sm_train, log_reg_pred2)))
+    plt.plot(log_fpr3, log_tpr3, label='Logistic Regression (After SMOTE 1:8514) Classifier Score: {:.4f}'.format(roc_auc_score(y2sm_train, log_reg_pred3)))
+    plt.plot(log_fpr4, log_tpr4, label='Logistic Regression (SMOTE 1:9000 & Under-sample 1:6000) Classifier Score: {:.4f}'.format(roc_auc_score(y8sm_train, log_reg_pred8)))
+    plt.plot([0, 1], [0, 1], 'k--')
+    plt.axis([-0.01, 1, 0, 1])
+    plt.xlabel('False Positive Rate', fontsize=16)
+    plt.ylabel('True Positive Rate', fontsize=16)
+    plt.annotate('Minimum ROC Score of 50% \n (This is the minimum score to get)', xy=(0.5, 0.5), xytext=(0.6, 0.3),
+                arrowprops=dict(facecolor='#6E726D', shrink=0.05),
+                )
+    plt.legend()
+
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_auc_score
+graph_roc_curve_multiple(log_fpr, log_tpr, log_fpr2, log_tpr2)
+plt.show()
+
+
+
+
+
+# Randon Forest Classifier
+from sklearn.model_selection import GridSearchCV
+tree_params = {"criterion": ["gini", "entropy"], "max_depth": list(range(2,4,1)),
+              "min_samples_leaf": list(range(5,7,1))}
+grid_tree = GridSearchCV(DecisionTreeClassifier(), tree_params)
+grid_tree.fit(X_train, y_train)
+# tree best estimator
+tree_clf = grid_tree.best_estimator_
+y_pred_tree = tree_clf.predict(X_test)
+
+
+
+
+# Decision Tree SMOTE 4000
+from sklearn.model_selection import GridSearchCV
+tree_params = {"criterion": ["gini", "entropy"], "max_depth": list(range(2,4,1)),
+              "min_samples_leaf": list(range(5,7,1))}
+grid_tree_sm1 = GridSearchCV(DecisionTreeClassifier(), tree_params)
+grid_tree_sm1.fit(Xsm_train, ysm_train)
+log_reg_sm1 = grid_tree_sm1.best_estimator_
+ysm_pred_tree1 = log_reg_sm1.predict(X_test)
+
+# SMOTE 8514
+from sklearn.model_selection import GridSearchCV
+tree_params = {"criterion": ["gini", "entropy"], "max_depth": list(range(2,4,1)),
+              "min_samples_leaf": list(range(5,7,1))}
+grid_tree_sm2 = GridSearchCV(DecisionTreeClassifier(), tree_params)
+grid_tree_sm2.fit(X3sm_train, y3sm_train)
+log_reg_sm2 = grid_tree_sm2.best_estimator_
+ysm_pred_tree2 = log_reg_sm2.predict(X_test)
+
+
+# Undersampling & SMOTE
+df5 = df.sample(frac=1)
+non_fraud_df5 = df5.loc[df5['FraudFound_P'] == 0][:6000]
+fraud_df5 = df5.loc[df5['FraudFound_P'] == 1]
+normal_distributed_df5 = pd.concat([fraud_df5, non_fraud_df5])
+new_df5 = normal_distributed_df5.sample(frac=1, random_state=42)
+
+
+X5 = new_df5.iloc[:, :-1]
+y5 = new_df5.iloc[:, -1]
+X5_train, X5_test, y5_train, y5_test = train_test_split(X5, y5, test_size=0.2, random_state=42)
+
+sm = SMOTE(ratio={1: 9000},random_state=42)
+X5sm_train, y5sm_train = sm.fit_sample(X5_train, y5_train)
+
+
+grid_tree_sm5 = GridSearchCV(DecisionTreeClassifier(), tree_params)
+grid_tree_sm5.fit(X5sm_train, y5sm_train)
+log_reg_sm5 = grid_tree_sm5.best_estimator_
+ysm_pred_tree5 = log_reg_sm5.predict(X_test)
+
+# recall  --  RF
+from sklearn.metrics import recall_score
+
+# UNDER-SAMPLE (1:6000) and SMOTE (1:9000)
+recall_score(y_test, ysm_pred_tree5, average='binary') # 0.8897058823529411
+precision_score(y_test, ysm_pred_tree5)  # 0.12015888778550149
+
+# Logistic Regression After SMOTE (1:9000)
+recall_score(y_test, ysm_pred_tree2, average='binary') # 0.7132352941176471
+precision_score(y_test, ysm_pred_tree2)  # 0.13324175824175824
+
+# Logistic Regression After SMOTE (1:4000)
+recall_score(y_test, ysm_pred_tree1, average='binary')  # 0.5
+precision_score(y_test, ysm_pred_tree1)  # 0.1650485436893204
+
+# No SMOTE
+recall_score(y_test, y_pred_tree, average='binary') # 0
+precision_score(y_test, y_pred_tree) # 0
+
+
+
+# Tree Report
+from sklearn.metrics import classification_report
+
+y_pred_tree = tree_clf.predict(X_test)
+print(classification_report(y_test, y_pred_tree))
+
+ysm_pred_tree = log_reg_sm2.predict(X_test)
+print(classification_report(y_test, ysm_pred_tree))
+
+
+# confusion_matrix Logistic Regression
+from sklearn.metrics import confusion_matrix
+
+log_cf = confusion_matrix(y_test, y_pred_log)
+log_cf_sm = confusion_matrix(y_test, ysm_pred_log)
+
+
+# confusion_matrix Tree
+from sklearn.metrics import confusion_matrix
+tree_cf = confusion_matrix(y_test, y_pred_tree)
+tree_cf_sm = confusion_matrix(y_test, ysm_pred_tree)
+
+
+
+
+# ROC Curve
+from sklearn.metrics import roc_curve
+
+# Check cross validation of the Decision Tree   DecisionTree Classifier Cross Validation Score 94.06%
+tree_score = cross_val_score(tree_clf, X_train, y_train, cv=5)
+print('DecisionTree Classifier Cross Validation Score', round(tree_score.mean() * 100, 2).astype(str) + '%')
+
+
+
+from sklearn.model_selection import cross_val_predict
+# Create a DataFrame with all the scores and the classifiers names.
+
+log_reg_pred = cross_val_predict(log_reg, X_train, y_train, cv=5, method="decision_function")
+
+svc_pred = cross_val_predict(svc, X_train, y_train, cv=5, method="decision_function")
+
+
+from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_auc_score
+print('Logistic Regression: ', roc_auc_score(y_train, log_reg_pred))
+print('Decision Tree Classifier: ', roc_auc_score(y_train, tree_pred))
+
+
+
+
+
+# recall  -- LR
+from sklearn.metrics import recall_score
+
+# UNDER-SAMPLE (1:6000) and SMOTE (1:9000)
+recall_score(y8_test, y8sm_pred_log, average='binary')
+precision_score(y8_test, y8sm_pred_log)  # 0.1
+
+# Logistic Regression After SMOTE (1:8514)
+recall_score(y1_test, y2sm_pred_log, average='binary')
+precision_score(y1_test, y2sm_pred_log)
+
+# Logistic Regression After SMOTE (1:4000)
+recall_score(y1_test, y1sm_pred_log, average='binary')
+precision_score(y1_test, y1sm_pred_log)
+
+# Logistic Regression
+recall_score(y1_test, y_pred_log, average='binary')
+precision_score(y1_test, y_pred_log)
+
+
+
+
+
+# confusion_matrix LR
+from sklearn.metrics import confusion_matrix
+LR_cf1 = confusion_matrix(y1_test, y_pred_log)
+LR_cf2 = confusion_matrix(y1_test, y1sm_pred_log)
+LR_cf3 = confusion_matrix(y1_test, y2sm_pred_log)
+LR_cf4 = confusion_matrix(y8_test, y8sm_pred_log)
+
+
+
+
+from sklearn.metrics import confusion_matrix
+fig, ax = plt.subplots(2, 2,figsize=(22,12))
+sns.heatmap(LR_cf1, ax=ax[0][0], annot=True, cmap=plt.cm.Blues)
+ax[0, 0].set_title("Logistic Regression \n Confusion Matrix", fontsize=14)
+ax[0, 0].set_xticklabels(['', ''], fontsize=14, rotation=90)
+ax[0, 0].set_yticklabels(['', ''], fontsize=14, rotation=360)
+
+sns.heatmap(LR_cf2, ax=ax[0][1], annot=True, cmap=plt.cm.Blues)
+ax[0][1].set_title("Logistic Regression_SMOTE(1:4000) \n Confusion Matrix", fontsize=14)
+ax[0][1].set_xticklabels(['', ''], fontsize=14, rotation=90)
+ax[0][1].set_yticklabels(['', ''], fontsize=14, rotation=360)
+
+sns.heatmap(LR_cf3, ax=ax[1][0], annot=True, cmap=plt.cm.Blues)
+ax[1][0].set_title("Logistic Regression_SMOTE(1:8514) \n Confusion Matrix", fontsize=14)
+ax[1][0].set_xticklabels(['', ''], fontsize=14, rotation=90)
+ax[1][0].set_yticklabels(['', ''], fontsize=14, rotation=360)
+
+sns.heatmap(LR_cf4, ax=ax[1][1], annot=True, cmap=plt.cm.Blues)
+ax[1][1].set_title("Logistic Regression_SMOTE(1:9000) & Undersampling(1:6000) \n Confusion Matrix", fontsize=14)
+ax[1][1].set_xticklabels(['', ''], fontsize=14, rotation=90)
+ax[1][1].set_yticklabels(['', ''], fontsize=14, rotation=360)
+
+
+
+
+# RF
+recall_score(y_test, y_pred_tree, average='binary')
+precision_score(y_test, y_pred_tree)
+
+recall_score(y_test, ysm_pred_tree1, average='binary')
+precision_score(y_test, ysm_pred_tree1)
+
+recall_score(y_test, ysm_pred_tree2, average='binary')
+precision_score(y_test, ysm_pred_tree2)
+
+recall_score(y_test, ysm_pred_tree5, average='binary')
+precision_score(y_test, ysm_pred_tree5)
+
+
+
+# confusion_matrix Tree
+from sklearn.metrics import confusion_matrix
+tree_cf1 = confusion_matrix(y_test, y_pred_tree)
+tree_cf2 = confusion_matrix(y_test, ysm_pred_tree1)
+tree_cf3 = confusion_matrix(y_test, ysm_pred_tree2)
+tree_cf4 = confusion_matrix(y_test, ysm_pred_tree5)
+
+
+from sklearn.metrics import confusion_matrix
+fig, ax = plt.subplots(2, 2,figsize=(22,12))
+sns.heatmap(tree_cf1, ax=ax[0][0], annot=True, cmap=plt.cm.Blues)
+ax[0, 0].set_title("Random Forest Classifier \n Confusion Matrix", fontsize=14)
+ax[0, 0].set_xticklabels(['', ''], fontsize=14, rotation=90)
+ax[0, 0].set_yticklabels(['', ''], fontsize=14, rotation=360)
+
+sns.heatmap(tree_cf2, ax=ax[0][1], annot=True, cmap=plt.cm.Blues)
+ax[0][1].set_title("Random Forest Classifier_SMOTE(1:4000) \n Confusion Matrix", fontsize=14)
+ax[0][1].set_xticklabels(['', ''], fontsize=14, rotation=90)
+ax[0][1].set_yticklabels(['', ''], fontsize=14, rotation=360)
+
+sns.heatmap(tree_cf3, ax=ax[1][0], annot=True, cmap=plt.cm.Blues)
+ax[1][0].set_title("Random Forest Classifier_SMOTE(1:8514) \n Confusion Matrix", fontsize=14)
+ax[1][0].set_xticklabels(['', ''], fontsize=14, rotation=90)
+ax[1][0].set_yticklabels(['', ''], fontsize=14, rotation=360)
+
+sns.heatmap(tree_cf4, ax=ax[1][1], annot=True, cmap=plt.cm.Blues)
+ax[1][1].set_title("Random Forest Classifier_SMOTE(1:9000) & Undersampling(1:6000) \n Confusion Matrix", fontsize=14)
+ax[1][1].set_xticklabels(['', ''], fontsize=14, rotation=90)
+ax[1][1].set_yticklabels(['', ''], fontsize=14, rotation=360)
+
+
+#############################################
+from sklearn.metrics import roc_curve
+from sklearn.model_selection import cross_val_predict
+
+rf_reg_pred = cross_val_predict(tree_clf, X_train, y_train, cv=5)
+rf_fpr, rf_tpr, rf_thresold = roc_curve(y_train, rf_reg_pred)
+
+rf_reg_pred2 = cross_val_predict(log_reg_sm1, Xsm_train, ysm_train, cv=5)
+rf_fpr2, rf_tpr2, rf_thresold2 = roc_curve(ysm_train, rf_reg_pred2)
+
+rf_reg_pred3 = cross_val_predict(log_reg_sm2, X3sm_train, y3sm_train, cv=5)
+rf_fpr3, rf_tpr3, rf_thresold3 = roc_curve(y3sm_train, rf_reg_pred3)
+
+rf_reg_pred4 = cross_val_predict(log_reg_sm5, X5_train, y5_train, cv=5)
+rf_fpr4, rf_tpr4, rf_thresold4 = roc_curve(y5_train, rf_reg_pred4)
+
+def graph_roc_curve_multiple(rf_fpr, rf_tpr, rf_fpr2, rf_tpr2):
+    plt.figure(figsize=(16,8))
+    plt.title('ROC Curve \n Top 4 Classifiers', fontsize=18)
+    plt.plot(rf_fpr, rf_tpr, label='Random Forest (Before SMOTE) Classifier Score: {:.4f}'.format(roc_auc_score(y_train, rf_reg_pred)))
+    plt.plot(rf_fpr2, rf_tpr2, label='Random Forest (After SMOTE 1:4000) Classifier Score: {:.4f}'.format(roc_auc_score(ysm_train, rf_reg_pred2)))
+    plt.plot(rf_fpr3, rf_tpr3, label='Random Forest (After SMOTE 1:8514) Classifier Score: {:.4f}'.format(roc_auc_score(y3sm_train, rf_reg_pred3)))
+    plt.plot(rf_fpr4, rf_tpr4, label='Random Forest (SMOTE 1:9000 & Under-sample 1:6000) Classifier Score: {:.4f}'.format(roc_auc_score(y5_train, rf_reg_pred4)))
+    plt.plot([0, 1], [0, 1], 'k--')
+    plt.axis([-0.01, 1, 0, 1])
+    plt.xlabel('False Positive Rate', fontsize=16)
+    plt.ylabel('True Positive Rate', fontsize=16)
+    plt.annotate('Minimum ROC Score of 50% \n (This is the minimum score to get)', xy=(0.5, 0.5), xytext=(0.6, 0.3),
+                arrowprops=dict(facecolor='#6E726D', shrink=0.05),
+                )
+    plt.legend()
+
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_auc_score
+graph_roc_curve_multiple(rf_fpr, rf_tpr, rf_fpr2, rf_tpr2)
+plt.show()
+
+
+
+
+
+from itertools import cycle
+from sklearn.metrics import confusion_matrix,precision_recall_curve,auc,roc_auc_score,roc_curve,recall_score,classification_report
+
+lr = LogisticRegression(C = 0.01, penalty = 'l1')
+lr.fit(X_train, y_train)
+y_pred_undersample_proba = lr.predict_proba(X_test)
+thresholds = [0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]
+colors = cycle(['navy', 'turquoise', 'darkorange', 'cornflowerblue', 'teal', 'red', 'yellow', 'green', 'blue','black'])
+
+plt.figure(figsize=(5,5))
+
+j = 1
+for i, color in zip(thresholds, colors):
+    y_test_predictions_prob = y_pred_undersample_proba[:, 1] > i
+
+    precision, recall, thresholds = precision_recall_curve(y4_test, y_test_predictions_prob)
+
+    # Plot Precision-Recall curve
+    plt.plot(recall, precision, color=color,
+             label='Threshold: %s' % i)
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.ylim([0.0, 1.05])
+    plt.xlim([0.0, 1.0])
+    plt.title('Precision-Recall example')
+    plt.legend(loc="lower left")
+
+
+
+# Gradient Boosting
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.metrics import classification_report, confusion_matrix, roc_curve, auc
+
+learning_rates = [0.05, 0.1, 0.25, 0.5, 0.75, 1]
+for learning_rate in learning_rates:
+    gb1 = GradientBoostingClassifier(n_estimators=20, learning_rate = learning_rate, max_features=2, max_depth = 2, random_state = 0)
+    gb1.fit(X_train, y_train)
+    print("Learning rate: ", learning_rate)
+    print("Accuracy score (training): {0:.3f}".format(gb1.score(X_train, y_train)))
+    print("Accuracy score (validation): {0:.3f}".format(gb1.score(X_test, y_test)))
+    print()
+
+
+gb1 = GradientBoostingClassifier(n_estimators=20, learning_rate = 0.5, max_features=2, max_depth = 2, random_state = 0)    ### 0  0
+gb1.fit(X_train, y_train)
+predictions1 = gb1.predict(X_test)
+print("Confusion Matrix:")
+print(confusion_matrix(y_test, predictions))
+print()
+print("Classification Report")
+print(classification_report(y_test, predictions))
+
+
+
+
+############################################################## SMOTE(4000)
+
+learning_rates = [0.05, 0.1, 0.25, 0.5, 0.75, 1]
+for learning_rate in learning_rates:
+    gb2 = GradientBoostingClassifier(n_estimators=20, learning_rate = learning_rate, max_features=2, max_depth = 2, random_state = 0)
+    gb2.fit(Xsm_train, ysm_train)
+    print("Learning rate: ", learning_rate)
+    print("Accuracy score (training): {0:.3f}".format(gb2.score(Xsm_train, ysm_train)))
+    print("Accuracy score (validation): {0:.3f}".format(gb2.score(X_test, y_test)))
+    print()
+
+
+gb2 = GradientBoostingClassifier(n_estimators=20, learning_rate = 0.5, max_features=2, max_depth = 2, random_state = 0)   ### 0.5 => 0.18  0.17
+gb2.fit(Xsm_train, ysm_train)
+predictions2 = gb2.predict(X_test)
+print("Confusion Matrix:")
+print(confusion_matrix(y_test, predictions2))
+print()
+print("Classification Report")
+print(classification_report(y_test, predictions2))
+
+
+############################# SMOTE (8541)
+
+learning_rates = [0.05, 0.1, 0.25, 0.5, 0.75, 1]
+for learning_rate in learning_rates:
+    gb3 = GradientBoostingClassifier(n_estimators=20, learning_rate = learning_rate, max_features=2, max_depth = 2, random_state = 0)
+    gb3.fit(X3sm_train, y3sm_train)
+    print("Learning rate: ", learning_rate)
+    print("Accuracy score (training): {0:.3f}".format(gb3.score(X3sm_train, y3sm_train)))
+    print("Accuracy score (validation): {0:.3f}".format(gb3.score(X_test, y_test)))
+    print()
+
+
+
+gb3 = GradientBoostingClassifier(n_estimators=20, learning_rate = 0.05, max_features=2, max_depth = 2, random_state = 0)   ### 0.05 => 0.57  0.14
+gb3.fit(X3sm_train, y3sm_train)
+predictions3 = gb3.predict(X_test)
+print("Confusion Matrix:")
+print(confusion_matrix(y_test, predictions))
+print()
+print("Classification Report")
+print(classification_report(y_test, predictions))
+
+
+####################################### SMOTE & Undersampling
+
+learning_rates = [0.05, 0.1, 0.25, 0.5, 0.75, 1]
+for learning_rate in learning_rates:
+    gb4 = GradientBoostingClassifier(n_estimators=20, learning_rate = learning_rate, max_features=2, max_depth = 2, random_state = 0)
+    gb4.fit(X4sm_train, y4sm_train)
+    print("Learning rate: ", learning_rate)
+    print("Accuracy score (training): {0:.3f}".format(gb4.score(X4sm_train, y4sm_train)))
+    print("Accuracy score (validation): {0:.3f}".format(gb4.score(X_test, y_test)))
+    print()
+
+
+
+gb4 = GradientBoostingClassifier(n_estimators=20, learning_rate = 0.05, max_features=2, max_depth = 2, random_state = 0)   ### 0.05 => 0.95  0.09
+gb4.fit(X4sm_train, y4sm_train)
+predictions4 = gb4.predict(X_test)
+print("Confusion Matrix:")
+print(confusion_matrix(y_test, predictions))
+print()
+print("Classification Report")
+print(classification_report(y_test, predictions))
+
+
+
+# ROC Curve
+from sklearn.metrics import roc_curve
+from sklearn.model_selection import cross_val_predict
+
+log_reg_pred = cross_val_predict(gb1, X_train, y_train, cv=5)
+log_fpr, log_tpr, log_thresold = roc_curve(y_train, log_reg_pred)
+
+log_reg_pred2 = cross_val_predict(gb2, Xsm_train, ysm_train, cv=5)
+log_fpr2, log_tpr2, log_thresold2 = roc_curve(ysm_train, log_reg_pred2)
+
+log_reg_pred3 = cross_val_predict(gb3, X3sm_train, y3sm_train, cv=5)
+log_fpr3, log_tpr3, log_thresold3 = roc_curve(y3sm_train, log_reg_pred3)
+
+log_reg_pred4 = cross_val_predict(gb4, X4sm_train, y4sm_train, cv=5)
+log_fpr4, log_tpr4, log_thresold4 = roc_curve(y4sm_train, log_reg_pred4)
+
+def graph_roc_curve_multiple(log_fpr, log_tpr, log_fpr2, log_tpr2):
+    plt.figure(figsize=(16,8))
+    plt.title('ROC Curve \n Top 4 Classifiers', fontsize=18)
+    plt.plot(log_fpr, log_tpr, label='Gradient Boosting (Before SMOTE) & Any Learning Rate Classifier Score: {:.4f}'.format(roc_auc_score(y_train, log_reg_pred)))
+    plt.plot(log_fpr2, log_tpr2, label='Gradient Boosting (After SMOTE 1:4000) & Learning Rate(0.5) Classifier Score: {:.4f}'.format(roc_auc_score(ysm_train, log_reg_pred2)))
+    plt.plot(log_fpr3, log_tpr3, label='Gradient Boosting (After SMOTE 1:8514) Learning Rate(0.05) Classifier Score: {:.4f}'.format(roc_auc_score(y3sm_train, log_reg_pred3)))
+    plt.plot(log_fpr4, log_tpr4, label='Gradient Boosting (SMOTE 1:9000 & Under-sample 1:6000) Learning Rate(0.05) Classifier Score: {:.4f}'.format(roc_auc_score(y4sm_train, log_reg_pred4)))
+    plt.plot([0, 1], [0, 1], 'k--')
+    plt.axis([-0.01, 1, 0, 1])
+    plt.xlabel('False Positive Rate', fontsize=16)
+    plt.ylabel('True Positive Rate', fontsize=16)
+    plt.annotate('Minimum ROC Score of 50% \n (This is the minimum score to get)', xy=(0.5, 0.5), xytext=(0.6, 0.3),
+                arrowprops=dict(facecolor='#6E726D', shrink=0.05),
+                )
+    plt.legend()
+
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_auc_score
+graph_roc_curve_multiple(log_fpr, log_tpr, log_fpr2, log_tpr2)
+plt.show()
+
+
+
+# confusion_matrix Tree
+from sklearn.metrics import confusion_matrix
+tree_cf1 = confusion_matrix(y_test, predictions1)
+tree_cf2 = confusion_matrix(y_test, predictions2)
+tree_cf3 = confusion_matrix(y_test, predictions3)
+tree_cf4 = confusion_matrix(y_test, predictions4)
+
+
+from sklearn.metrics import confusion_matrix
+fig, ax = plt.subplots(2, 2,figsize=(22,12))
+sns.heatmap(tree_cf1, ax=ax[0][0], annot=True, cmap=plt.cm.Blues)
+ax[0, 0].set_title("Gradient Boosting & Any Learning Rate \n Confusion Matrix", fontsize=14)
+ax[0, 0].set_xticklabels(['', ''], fontsize=14, rotation=90)
+ax[0, 0].set_yticklabels(['', ''], fontsize=14, rotation=360)
+
+sns.heatmap(tree_cf2, ax=ax[0][1], annot=True, cmap=plt.cm.Blues)
+ax[0][1].set_title("Gradient Boosting_SMOTE(1:4000) & Learning Rate(0.5) \n Confusion Matrix", fontsize=14)
+ax[0][1].set_xticklabels(['', ''], fontsize=14, rotation=90)
+ax[0][1].set_yticklabels(['', ''], fontsize=14, rotation=360)
+
+sns.heatmap(tree_cf3, ax=ax[1][0], annot=True, cmap=plt.cm.Blues)
+ax[1][0].set_title("Gradient Boosting_SMOTE(1:8514) & Learning Rate(0.05) \n Confusion Matrix", fontsize=14)
+ax[1][0].set_xticklabels(['', ''], fontsize=14, rotation=90)
+ax[1][0].set_yticklabels(['', ''], fontsize=14, rotation=360)
+
+sns.heatmap(tree_cf4, ax=ax[1][1], annot=True, cmap=plt.cm.Blues)
+ax[1][1].set_title("Gradient Boosting_SMOTE(1:9000) & Undersampling(1:6000) & Learning Rate(0.05) \n Confusion Matrix", fontsize=14)
+ax[1][1].set_xticklabels(['', ''], fontsize=14, rotation=90)
+ax[1][1].set_yticklabels(['', ''], fontsize=14, rotation=360)
+
+
+
+
+
+############## Naive Bayes
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.naive_bayes import GaussianNB
+
+from sklearn.preprocessing import QuantileTransformer
+pipeline = make_pipeline(QuantileTransformer(output_distribution='normal'), GaussianNB())
+pipeline.fit(X1_train, y1_train)
+y_pred66 = pipeline.predict(X1_test)
+y_pred66_prob = pipeline.predict_proba(X1_test)
+recall_score(y1_test,y_pred66) # 0.09
+precision_score (y1_test,y_pred66)
+NB1 = confusion_matrix(y1_test,y_pred66)
+
+pipeline11 = make_pipeline(QuantileTransformer(output_distribution='normal'), GaussianNB())
+pipeline11.fit(X1sm_train, y1sm_train)
+y_pred6 = pipeline11.predict(X1_test)
+y_pred6_prob = pipeline11.predict_proba(X1_test)
+recall_score(y1_test,y_pred6) # 0.2857142857142857
+precision_score (y1_test,y_pred6)
+NB2 = confusion_matrix(y1_test,y_pred6)
+
+
+pipeline7 = make_pipeline(QuantileTransformer(output_distribution='normal'), GaussianNB())
+pipeline7.fit(X2sm_train, y2sm_train)
+y_pred7 = pipeline7.predict(X1_test)
+recall_score(y1_test,y_pred7) # 0.406
+precision_score (y1_test,y_pred7)
+NB3 = confusion_matrix(y1_test,y_pred7)
+
+pipeline8 = make_pipeline(QuantileTransformer(output_distribution='normal'), GaussianNB())
+pipeline8.fit(X8sm_train, y8sm_train)
+y_pred8 = pipeline8.predict(X8_test)
+recall_score(y8_test,y_pred8) # 0.7857142857142857
+precision_score (y8_test,y_pred8)
+NB4 = confusion_matrix(y8_test,y_pred8)
+
+
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.naive_bayes import GaussianNB
+from sklearn.preprocessing import QuantileTransformer
+
+def get_predictions(clf, X_train, y_train, X_test):
+    # create classifier
+    clf = clf
+    # fit it to training data
+    clf.fit(X_train,y_train)
+    # predict using test data
+    y_pred = clf.predict(X_test)
+    # Compute predicted probabilities: y_pred_prob
+    y_pred_prob = clf.predict_proba(X_test)
+    #for fun: train-set predictions
+    train_pred = clf.predict(X_train)
+    print('train-set confusion matrix:\n', confusion_matrix(y_train,train_pred))
+    return y_pred, y_pred_prob
+
+def print_scores(y_test,y_pred,y_pred_prob):
+    print('test-set confusion matrix:\n', confusion_matrix(y_test,y_pred))
+    print("recall score: ", recall_score(y_test,y_pred))
+    print("precision score: ", precision_score(y_test,y_pred))
+    print("f1 score: ", f1_score(y_test,y_pred))
+    print("accuracy score: ", accuracy_score(y_test,y_pred))
+    print("ROC AUC: {}".format(roc_auc_score(y_test, y_pred_prob[:,1])))
+
+
+y_pred, y_pred_prob = get_predictions(GaussianNB(), X1_train, y1_train, X1_test)
+print_scores(y1_test,y_pred,y_pred_prob)
+
+y_pred, y_pred_prob = get_predictions(GaussianNB(), X1sm_train, y1sm_train, X1_test)
+print_scores(y1_test,y_pred,y_pred_prob)
+
+y_pred, y_pred_prob = get_predictions(GaussianNB(), X2sm_train, y2sm_train, X1_test)
+print_scores(y1_test,y_pred,y_pred_prob)
+
+y_pred, y_pred_prob = get_predictions(GaussianNB(), X8sm_train, y8sm_train, X8_test)
+print_scores(y8_test,y_pred,y_pred_prob)
+
+
+
+
+
+# ROC Curve
+
+
+from sklearn.metrics import roc_curve
+from sklearn.model_selection import cross_val_predict
+
+log_reg_pred = cross_val_predict(log_reg, X1_train, y1_train, cv=5)
+log_fpr, log_tpr, log_thresold = roc_curve(y1_train, log_reg_pred)
+
+log_reg_pred2 = cross_val_predict(log_reg2, X1sm_train, y1sm_train, cv=5)
+log_fpr2, log_tpr2, log_thresold2 = roc_curve(y1sm_train, log_reg_pred2)
+
+log_reg_pred3 = cross_val_predict(log_reg3, X2sm_train, y2sm_train, cv=5)
+log_fpr3, log_tpr3, log_thresold3 = roc_curve(y2sm_train, log_reg_pred3)
+
+log_reg_pred8 = cross_val_predict(log_reg8, X8sm_train, y8sm_train, cv=5)
+log_fpr4, log_tpr4, log_thresold4 = roc_curve(y8sm_train, log_reg_pred8)
+
+def graph_roc_curve_multiple(log_fpr, log_tpr, log_fpr2, log_tpr2):
+    plt.figure(figsize=(16,8))
+    plt.title('ROC Curve \n Top 4 Classifiers', fontsize=18)
+    plt.plot(log_fpr, log_tpr, label='Logistic Regression (Before SMOTE) Classifier Score: {:.4f}'.format(roc_auc_score(y1_train, log_reg_pred)))
+    plt.plot(log_fpr2, log_tpr2, label='Logistic Regression (After SMOTE 1:4000) Classifier Score: {:.4f}'.format(roc_auc_score(y1sm_train, log_reg_pred2)))
+    plt.plot(log_fpr3, log_tpr3, label='Logistic Regression (After SMOTE 1:8514) Classifier Score: {:.4f}'.format(roc_auc_score(y2sm_train, log_reg_pred3)))
+    plt.plot(log_fpr4, log_tpr4, label='Logistic Regression (SMOTE 1:9000 & Under-sample 1:6000) Classifier Score: {:.4f}'.format(roc_auc_score(y8sm_train, log_reg_pred8)))
+    plt.plot([0, 1], [0, 1], 'k--')
+    plt.axis([-0.01, 1, 0, 1])
+    plt.xlabel('False Positive Rate', fontsize=16)
+    plt.ylabel('True Positive Rate', fontsize=16)
+    plt.annotate('Minimum ROC Score of 50% \n (This is the minimum score to get)', xy=(0.5, 0.5), xytext=(0.6, 0.3),
+                arrowprops=dict(facecolor='#6E726D', shrink=0.05),
+                )
+    plt.legend()
+
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_auc_score
+graph_roc_curve_multiple(log_fpr, log_tpr, log_fpr2, log_tpr2)
+plt.show()
+
+# confusion_matrix Tree
+from sklearn.metrics import confusion_matrix
+tree_cf1 = confusion_matrix(y_test, y_pred_tree)
+tree_cf2 = confusion_matrix(y_test, ysm_pred_tree1)
+tree_cf3 = confusion_matrix(y_test, ysm_pred_tree2)
+tree_cf4 = confusion_matrix(y_test, ysm_pred_tree5)
+
+
+from sklearn.metrics import confusion_matrix
+fig, ax = plt.subplots(2, 2,figsize=(22,12))
+sns.heatmap(tree_cf1, ax=ax[0][0], annot=True, cmap=plt.cm.Blues)
+ax[0, 0].set_title("RandomForest Classifier \n Confusion Matrix", fontsize=14)
+ax[0, 0].set_xticklabels(['', ''], fontsize=14, rotation=90)
+ax[0, 0].set_yticklabels(['', ''], fontsize=14, rotation=360)
+
+sns.heatmap(tree_cf2, ax=ax[0][1], annot=True, cmap=plt.cm.Blues)
+ax[0][1].set_title("RandomForest Classifier_SMOTE(1:4000) \n Confusion Matrix", fontsize=14)
+ax[0][1].set_xticklabels(['', ''], fontsize=14, rotation=90)
+ax[0][1].set_yticklabels(['', ''], fontsize=14, rotation=360)
+
+sns.heatmap(tree_cf3, ax=ax[1][0], annot=True, cmap=plt.cm.Blues)
+ax[1][0].set_title("RandomForest Classifier_SMOTE(1:8514) \n Confusion Matrix", fontsize=14)
+ax[1][0].set_xticklabels(['', ''], fontsize=14, rotation=90)
+ax[1][0].set_yticklabels(['', ''], fontsize=14, rotation=360)
+
+sns.heatmap(tree_cf4, ax=ax[1][1], annot=True, cmap=plt.cm.Blues)
+ax[1][1].set_title("RandomForest Classifier_SMOTE(1:9000) & Undersampling(1:6000) \n Confusion Matrix", fontsize=14)
+ax[1][1].set_xticklabels(['', ''], fontsize=14, rotation=90)
+ax[1][1].set_yticklabels(['', ''], fontsize=14, rotation=360)
+
+
+
+from sklearn.metrics import confusion_matrix
+fig, ax = plt.subplots(2, 2,figsize=(22,12))
+sns.heatmap(NB1, ax=ax[0][0], annot=True, cmap=plt.cm.Blues)
+ax[0, 0].set_title("Naive Bayes \n Confusion Matrix", fontsize=14)
+ax[0, 0].set_xticklabels(['', ''], fontsize=14, rotation=90)
+ax[0, 0].set_yticklabels(['', ''], fontsize=14, rotation=360)
+
+sns.heatmap(NB2, ax=ax[0][1], annot=True, cmap=plt.cm.Blues)
+ax[0][1].set_title("Naive Bayes_SMOTE(1:4000) \n Confusion Matrix", fontsize=14)
+ax[0][1].set_xticklabels(['', ''], fontsize=14, rotation=90)
+ax[0][1].set_yticklabels(['', ''], fontsize=14, rotation=360)
+
+sns.heatmap(NB3, ax=ax[1][0], annot=True, cmap=plt.cm.Blues)
+ax[1][0].set_title("Naive Bayes_SMOTE(1:8514) \n Confusion Matrix", fontsize=14)
+ax[1][0].set_xticklabels(['', ''], fontsize=14, rotation=90)
+ax[1][0].set_yticklabels(['', ''], fontsize=14, rotation=360)
+
+sns.heatmap(NB4, ax=ax[1][1], annot=True, cmap=plt.cm.Blues)
+ax[1][1].set_title("Naive Bayes_SMOTE(1:9000) & Undersampling(1:6000) \n Confusion Matrix", fontsize=14)
+ax[1][1].set_xticklabels(['', ''], fontsize=14, rotation=90)
+ax[1][1].set_yticklabels(['', ''], fontsize=14, rotation=360)
+
